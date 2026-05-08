@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ejen Ali: Misi Sistem Pertahanan Badan</title>
+    <style>
+        :root {
+            --m-blue: #00d2ff;
+            --m-neon: #3a86ff;
+            --m-danger: #ff006e;
+            --m-dark: #0a0e14;
+        }
+
+        body {
+            background-color: var(--m-dark);
+            color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+        }
+
+        #game-container {
+            width: 100%;
+            max-width: 900px;
+            padding: 20px;
+        }
+
+        /* Header UI */
+        .hud {
+            display: flex;
+            justify-content: space-between;
+            background: rgba(0, 210, 255, 0.1);
+            border: 2px solid var(--m-blue);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.3);
+        }
+
+        .hp-bar {
+            width: 200px;
+            height: 20px;
+            background: #222;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid white;
+        }
+
+        #hp-fill {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #ff006e, #00ff88);
+            transition: width 0.5s ease;
+        }
+
+        /* Board */
+        .board {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tile {
+            aspect-ratio: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(0, 210, 255, 0.3);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            position: relative;
+            border-radius: 5px;
+        }
+
+        .tile.active {
+            background: var(--m-blue);
+            box-shadow: 0 0 20px var(--m-blue);
+            color: black;
+            transform: scale(1.05);
+        }
+
+        .tile.finish {
+            background: var(--m-danger);
+            border-color: white;
+        }
+
+        /* Control Panel */
+        .controls {
+            text-align: center;
+            background: #151b26;
+            padding: 20px;
+            border-radius: 15px;
+            border-top: 4px solid var(--m-blue);
+        }
+
+        button {
+            background: var(--m-blue);
+            border: none;
+            padding: 12px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            color: black;
+            cursor: pointer;
+            border-radius: 5px;
+            text-transform: uppercase;
+            transition: 0.3s;
+        }
+
+        button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 210, 255, 0.5);
+        }
+
+        /* Question Overlay */
+        #quiz-zone {
+            display: none;
+            margin-top: 20px;
+            animation: fadeIn 0.5s;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .option-btn {
+            display: block;
+            width: 100%;
+            margin: 10px 0;
+            background: #1a222d;
+            color: white;
+            border: 1px solid var(--m-blue);
+            text-align: left;
+            padding: 15px;
+        }
+
+        .option-btn:hover { background: rgba(0, 210, 255, 0.2); }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <h1 style="text-align: center; color: var(--m-blue); letter-spacing: 2px;">EJEN ALI: MISI PERTAHANAN BADAN</h1>
+    
+    <div class="hud">
+        <div>
+            <strong>EJEN:</strong> <span id="ejen-name">Ali</span><br>
+            <strong>LOKASI:</strong> Tile <span id="pos-val">1</span> / 20
+        </div>
+        <div>
+            <strong>IMUN-METER:</strong>
+            <div class="hp-bar"><div id="hp-fill"></div></div>
+        </div>
+    </div>
+
+    <div class="board" id="board">
+        </div>
+
+    <div class="controls">
+        <div id="action-area">
+            <h3 id="status-msg">Sistem Sedia. Klik Dadu untuk Mula.</h3>
+            <button onclick="rollDice()">LONTAR DADU HOLOGRAM</button>
+        </div>
+
+        <div id="quiz-zone">
+            <h3 id="question-text">Soalan M.A.T.A.</h3>
+            <div id="options-container"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentPos = 1;
+    let hp = 100;
+    const totalTiles = 20;
+
+    const questions = [
+        { q: "Apakah barisan pertahanan pertama badan?", a: ["Kulit", "Sel Darah Putih", "Antibodi"], correct: 0 },
+        { q: "Enzim dalam air mata yang membunuh bakteria ialah...", a: ["Amilase", "Lisozim", "Pepsin"], correct: 1 },
+        { q: "Proses sel darah putih menelan bakteria dipanggil...", a: ["Osmosis", "Fagositosis", "Difusi"], correct: 1 },
+        { q: "Vaksin mengandungi apa?", a: ["Antibodi kuat", "Patogen yang dilemahkan", "Vitamin C"], correct: 1 }
+    ];
+
+    function initBoard() {
+        const board = document.getElementById('board');
+        for (let i = 1; i <= totalTiles; i++) {
+            const tile = document.createElement('div');
+            tile.className = 'tile';
+            tile.id = `tile-${i}`;
+            tile.innerText = i;
+            if (i === totalTiles) {
+                tile.innerText = "BOSS";
+                tile.classList.add('finish');
+            }
+            board.appendChild(tile);
+        }
+        updateUI();
+    }
+
+    function updateUI() {
+        document.querySelectorAll('.tile').forEach(t => t.classList.remove('active'));
+        document.getElementById(`tile-${currentPos}`).classList.add('active');
+        document.getElementById('pos-val').innerText = currentPos;
+        document.getElementById('hp-fill').style.width = hp + "%";
+    }
+
+    function rollDice() {
+        const move = Math.floor(Math.random() * 3) + 1;
+        alert("Dadu Hologram: " + move);
+        currentPos += move;
+        if (currentPos > totalTiles) currentPos = totalTiles;
+        updateUI();
+        showQuiz();
+    }
+
+    function showQuiz() {
+        document.getElementById('action-area').style.display = 'none';
+        document.getElementById('quiz-zone').style.display = 'block';
+        
+        const qData = questions[Math.floor(Math.random() * questions.length)];
+        document.getElementById('question-text').innerText = qData.q;
+        
+        const container = document.getElementById('options-container');
+        container.innerHTML = "";
+        
+        qData.a.forEach((opt, idx) => {
+            const btn = document.createElement('button');
+            btn.className = 'option-btn';
+            btn.innerText = opt;
+            btn.onclick = () => checkAnswer(idx, qData.correct);
+            container.appendChild(btn);
+        });
+    }
+
+    function checkAnswer(selected, correct) {
+        if (selected === correct) {
+            alert("TEPAT, EJEN! Teruskan misi.");
+        } else {
+            alert("SALAH! Virus menyerang. Undur 2 langkah!");
+            hp -= 20;
+            currentPos = Math.max(1, currentPos - 2);
+        }
+        
+        if (hp <= 0) {
+            alert("GAME OVER. Sistem Imun Lumpuh!");
+            location.reload();
+        } else if (currentPos >= totalTiles) {
+            alert("TAHNIAH EJEN! Virus Omega Berjaya Dihapuskan!");
+            location.reload();
+        }
+
+        document.getElementById('action-area').style.display = 'block';
+        document.getElementById('quiz-zone').style.display = 'none';
+        updateUI();
+    }
+
+    initBoard();
+</script>
+
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EJEN ALI: MISI SISTEM PERTAHANAN BADAN</title>
+    <style>
+        :root {
+            --m-blue: #00d2ff;
+            --m-neon: #3a86ff;
+            --m-danger: #ff006e;
+            --m-dark: #0a0e14;
+            --m-gold: #ffd700;
+        }
+
+        body {
+            background-color: var(--m-dark);
+            color: white;
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        #game-container {
+            width: 100%;
+            max-width: 800px;
+            padding: 20px;
+            background: radial-gradient(circle at center, #1a222d 0%, #0a0e14 100%);
+        }
+
+        /* UI Screens */
+        .screen { display: none; text-align: center; animation: fadeIn 0.5s; }
+        .active-screen { display: block; }
+
+        /* HUD */
+        .hud {
+            display: flex;
+            justify-content: space-between;
+            background: rgba(0, 210, 255, 0.1);
+            border: 2px solid var(--m-blue);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
+        }
+
+        .hp-bar { width: 150px; height: 15px; background: #222; border-radius: 10px; border: 1px solid white; overflow: hidden; }
+        #hp-fill { width: 100%; height: 100%; background: linear-gradient(90deg, #ff006e, #00ff88); transition: 0.5s; }
+
+        /* Board Grid */
+        .board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin: 20px 0; }
+        .tile {
+            aspect-ratio: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(0, 210, 255, 0.3);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            font-size: 12px;
+            border-radius: 8px;
+            position: relative;
+        }
+        .tile.active { background: var(--m-blue); color: black; box-shadow: 0 0 20px var(--m-blue); transform: scale(1.1); z-index: 2; }
+        .tile.special { border-color: var(--m-gold); color: var(--m-gold); }
+
+        /* Buttons & Inputs */
+        button {
+            background: var(--m-blue); border: none; padding: 12px 25px;
+            font-weight: bold; cursor: pointer; border-radius: 5px; transition: 0.3s;
+        }
+        button:hover { transform: scale(1.05); box-shadow: 0 0 15px var(--m-blue); }
+        input { padding: 10px; border-radius: 5px; border: 1px solid var(--m-blue); background: black; color: white; text-align: center; }
+
+        /* Quiz & Boss */
+        .quiz-box { background: #151b26; padding: 20px; border-radius: 15px; border-top: 4px solid var(--m-blue); }
+        .option-btn { display: block; width: 100%; margin: 10px 0; background: #1a222d; color: white; border: 1px solid var(--m-blue); text-align: left; }
+        
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="screen-welcome" class="screen active-screen">
+        <h1 style="color: var(--m-blue); font-size: 40px;">EJEN ALI</h1>
+        <h3>MISI SISTEM PERTAHANAN BADAN</h3>
+        <p>Sila Masukkan Nama Kod Ejen:</p>
+        <input type="text" id="input-name" placeholder="Nama Anda...">
+        <br><br>
+        <button onclick="initGame()">AKTIFKAN IRIS</button>
+    </div>
+
+    <div id="screen-game" class="screen">
+        <div class="hud">
+            <div>
+                <strong>EJEN:</strong> <span id="ejen-name-display">---</span><br>
+                <small id="status-effect" style="color: #00ff88;">Normal</small>
+            </div>
+            <div>
+                <strong>IMUN-METER:</strong>
+                <div class="hp-bar"><div id="hp-fill"></div></div>
+                <small>TILE: <span id="pos-val">1</span> / 20</small>
+            </div>
+        </div>
+
+        <div class="board" id="board"></div>
+
+        <div id="action-area" class="quiz-box">
+            <h3 id="msg-box">Sistem Sedia.</h3>
+            <button id="btn-roll" onclick="rollDice()">LONTAR DADU HOLOGRAM</button>
+        </div>
+
+        <div id="quiz-area" class="quiz-box" style="display: none;">
+            <h4 id="question-text">Soalan M.A.T.A...</h4>
+            <div id="options-container"></div>
+        </div>
+    </div>
+
+    <div id="screen-victory" class="screen">
+        <h1 style="color: var(--m-gold);">MISI BERJAYA!</h1>
+        <p>Skor Anda: <strong id="final-score">0</strong></p>
+        <div id="leaderboard" style="background: rgba(255,255,255,0.1); padding: 15px; border-radius: 10px; margin: 20px 0;">
+            <h4>🏆 CARTA EJEN TERBAIK 🏆</h4>
+            <div id="leaderboard-list"></div>
+        </div>
+        <button onclick="location.reload()">MAIN SEMULA</button>
+    </div>
+</div>
+
+<script>
+    // GAME STATE
+    let player = { name: "", hp: 100, pos: 1, hasShield: false, doubleMove: false };
+    let startTime, bossStage = 0;
+    const totalTiles = 20;
+
+    const questions = [
+        { q: "Apakah barisan pertahanan pertama badan?", a: ["Kulit", "Sel Darah Putih", "Antibodi"], c: 0 },
+        { q: "Lisozim dalam air mata berfungsi untuk...", a: ["Membeku darah", "Membunuh bakteria", "Membentuk parut"], c: 1 },
+        { q: "Fagositosis dilakukan oleh sel apa?", a: ["Sel darah merah", "Sel darah putih", "Platlet"], c: 1 },
+        { q: "Antibodi dihasilkan oleh sel...", a: ["Limfosit", "Fagosit", "Antigen"], c: 0 },
+        { q: "Vaksin memberikan keimunan jenis...", a: ["Aktif Buatan", "Pasif Semulajadi", "Pasif Buatan"], c: 0 }
+    ];
+
+    const bossQuestions = [
+        { q: "Suntikan antiserum memberikan keimunan apa? (2 perkataan)", a: "PASIF BUATAN" },
+        { q: "Bahan asing yang merangsang gerak balas imun?", a: "ANTIGEN" }
+    ];
+
+    // INITIALIZATION
+    function initGame() {
+        const nameInput = document.getElementById('input-name').value;
+        if (!nameInput) return alert("Masukkan Nama Ejen!");
+        
+        player.name = nameInput.toUpperCase();
+        document.getElementById('ejen-name-display').innerText = player.name;
+        switchScreen('screen-game');
+        
+        startTime = new Date();
+        createBoard();
+        updateUI();
+    }
+
+    function createBoard() {
+        const board = document.getElementById('board');
+        for (let i = 1; i <= totalTiles; i++) {
+            const tile = document.createElement('div');
+            tile.className = 'tile';
+            tile.id = `tile-${i}`;
+            tile.innerHTML = `<span>${i}</span>`;
+            if (i === 5) { tile.innerHTML += "💉"; tile.classList.add('special'); }
+            if (i === 13) { tile.innerHTML += "⚠️"; tile.classList.add('special'); }
+            if (i === 20) { tile.innerHTML = "BOSS 🦠"; tile.style.color = "#ff006e"; }
+            board.appendChild(tile);
+        }
+    }
+
+    // CORE LOGIC
+    function rollDice() {
+        let move = Math.floor(Math.random() * 3) + 1;
+        if (player.doubleMove) { move *= 2; player.doubleMove = false; }
+        
+        player.pos += move;
+        if (player.pos >= totalTiles) player.pos = totalTiles;
+        
+        updateUI();
+        checkTileEffect();
+    }
+
+    function checkTileEffect() {
+        if (player.pos === 5) { player.hasShield = true; alert("🛡️ PERISAI AKTIF!"); }
+        if (player.pos === 13) { player.hp -= 20; alert("⚠️ JANGKITAN! HP -20"); }
+        
+        if (player.pos === totalTiles) {
+            startBossFight();
+        } else {
+            showQuiz();
+        }
+        updateUI();
+    }
+
+    function showQuiz() {
+        document.getElementById('action-area').style.display = 'none';
+        document.getElementById('quiz-area').style.display = 'block';
+        
+        const qData = questions[Math.floor(Math.random() * questions.length)];
+        document.getElementById('question-text').innerText = qData.q;
+        
+        const container = document.getElementById('options-container');
+        container.innerHTML = "";
+        qData.a.forEach((opt, idx) => {
+            const btn = document.createElement('button');
+            btn.className = 'option-btn';
+            btn.innerText = opt;
+            btn.onclick = () => {
+                if (idx === qData.c) {
+                    alert("TEPAT!");
+                } else {
+                    if (player.hasShield) { alert("SALAH! Perisai melindungi anda."); player.hasShield = false; }
+                    else { alert("SALAH! Undur 2 langkah."); player.pos = Math.max(1, player.pos - 2); player.hp -= 10; }
+                }
+                resetToMain();
+            };
+            container.appendChild(btn);
+        });
+    }
+
+    // BOSS FIGHT
+    function startBossFight() {
+        document.getElementById('action-area').style.display = 'none';
+        document.getElementById('quiz-area').style.display = 'block';
+        loadBossQ();
+    }
+
+    function loadBossQ() {
+        const bq = bossQuestions[bossStage];
+        document.getElementById('question-text').innerHTML = `<span style="color:var(--m-danger)">FINAL BOSS:</span> ${bq.q}`;
+        document.getElementById('options-container').innerHTML = `
+            <input type="text" id="boss-input" style="width:90%" placeholder="JAWAPAN ANDA...">
+            <button onclick="checkBossAnswer()" style="margin-top:10px; width:100%">SERANG!</button>
+        `;
+    }
+
+    function checkBossAnswer() {
+        const val = document.getElementById('boss-input').value.toUpperCase();
+        if (val === bossQuestions[bossStage].a) {
+            bossStage++;
+            if (bossStage >= bossQuestions.length) endGame();
+            else loadBossQ();
+        } else {
+            alert("GAGAL! HP -30"); player.hp -= 30;
+            if (player.hp <= 0) location.reload();
+            updateUI();
+        }
+    }
+
+    // UTILS
+    function updateUI() {
+        document.querySelectorAll('.tile').forEach(t => t.classList.remove('active'));
+        document.getElementById(`tile-${player.pos}`).classList.add('active');
+        document.getElementById('hp-fill').style.width = player.hp + "%";
+        document.getElementById('pos-val').innerText = player.pos;
+        document.getElementById('status-effect').innerText = player.hasShield ? "🛡️ Shield Active" : "Normal";
+        if (player.hp <= 0) { alert("SISTEM IMUN LUPUH!"); location.reload(); }
+    }
+
+    function resetToMain() {
+        document.getElementById('action-area').style.display = 'block';
+        document.getElementById('quiz-area').style.display = 'none';
+        updateUI();
+    }
+
+    function switchScreen(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active-screen'));
+        document.getElementById(id).classList.add('active-screen');
+    }
+
+    function endGame() {
+        const timeTaken = Math.floor((new Date() - startTime) / 1000);
+        const score = (player.hp * 10) - timeTaken;
+        document.getElementById('final-score').innerText = score;
+        
+        let leaderboard = JSON.parse(localStorage.getItem('ejen_scores')) || [];
+        leaderboard.push({ name: player.name, score: score });
+        leaderboard.sort((a,b) => b.score - a.score);
+        localStorage.setItem('ejen_scores', JSON.stringify(leaderboard.slice(0,5)));
+        
+        document.getElementById('leaderboard-list').innerHTML = leaderboard.slice(0,5).map(s => 
+            `<p>${s.name}: ${s.score} pts</p>`
+        ).join('');
+        
+        switchScreen('screen-victory');
+    }
+</script>
+</body>
+</html>
